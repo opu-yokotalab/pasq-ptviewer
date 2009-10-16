@@ -4195,7 +4195,7 @@ public synchronized void paint(Graphics g) {
 		Color color,
 		String s,
 		int k) {
-		g.clearRect(i, j, dimension.width, dimension.height);
+		//g.clearRect(i, j, dimension.width, dimension.height);
 		if (color == null)
 			g.setColor(Color.black);
 		else
