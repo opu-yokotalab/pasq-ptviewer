@@ -234,19 +234,61 @@
  */
 
 
-import java.applet.*;
-import java.awt.*;
+import java.applet.Applet;
+import java.applet.AppletStub;
+import java.applet.AudioClip;
+import java.awt.AlphaComposite;
+import java.awt.Color;
+import java.awt.Composite;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.Event;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.MediaTracker;
+import java.awt.Point;
+import java.awt.Toolkit;
+import java.awt.image.BufferedImage;
 import java.awt.image.MemoryImageSource;
 import java.awt.image.PixelGrabber;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.*;
-import java.util.*;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.Enumeration;
+import java.util.Hashtable;
+import java.util.Vector;
 
 public class ptviewer extends Applet implements Runnable {
 
+	// ***** Add T.Fujino 20091018 ST **************************************************************
+	public static final int FADE_MODE_ON = 1;
+	public static final int FADE_MODE_OFF = 2;
+	public static final int FADE_COUNT_MAX = 50;
+	
+	public static final int PAINT_MODE_FLAG_NULL = 0;
+	public static final int PAINT_MODE_FLAG_FADE = 100;
+
+	int paintModeFlag = 0;
+	
+	Graphics2D g2;
+	Graphics2D offg;
+	Image offi;
+
+	Image viewOld;
+	Image viewNew;
+	
+	Composite alpha1;
+	Composite alpha2;
+	float alphavalue1 = 1.0f;
+	float alphavalue2 = 0.0f;
+	// ***** Add T.Fujino 20091018 Ed **************************************************************
+	
 	public ptviewer() {
 // FS+
 		quality = 6;
@@ -510,7 +552,7 @@ public class ptviewer extends Applet implements Runnable {
 		horizonPosition = 50;
 		authoringMode = false;
 	}
-
+	
 	void initialize() {
 		numhs = 0;
 		curhs = -1;
@@ -544,8 +586,17 @@ public class ptviewer extends Applet implements Runnable {
 		order = null;
 		horizonPosition = 50;
 	}
-
+	
 	public void init() {
+		
+		// ***** Add T.Fujino 20091018 ST **************************************************************
+		// バッファ用イメージの初期化
+		offi = createImage(getSize().width, getSize().height);
+		if(offi != null) {
+			offg = (Graphics2D) offi.getGraphics();
+		}
+    	// ***** Add T.Fujino 20091018 ED **************************************************************
+		
 		fatal = false;
 		preloadthread = null;
 		preload = null;
@@ -619,7 +670,7 @@ public class ptviewer extends Applet implements Runnable {
 		scaledPanos = null;
 */
 	}
-
+	
 	synchronized void PV_reset() {
 		ready = false;
 		hsready = false;
@@ -672,6 +723,7 @@ public class ptviewer extends Applet implements Runnable {
 	}
 
 	public void run() {
+
 		int k;
 		try {
 			// added a try block to catch out of memory error
@@ -763,7 +815,7 @@ public class ptviewer extends Applet implements Runnable {
 		} catch (Exception ex) {
 			ex.printStackTrace();
 		}
-	}
+    }
 
 	void finishInit(boolean flag) {
 		if (!flag)
@@ -1275,11 +1327,28 @@ public class ptviewer extends Applet implements Runnable {
 	}
 
 	public void update(Graphics g) {
-		paint(g);
+        paint(g);
 	}
 
-public synchronized void paint(Graphics g) {
+	public synchronized void paint(Graphics g) {
 
+	// ***** Add T.Fujino 20091018 ST **************************************************************
+	if(paintModeFlag == ptviewer.PAINT_MODE_FLAG_FADE)	{
+		// フェード効果時の描画処理
+		g2 = (Graphics2D)g;
+		//offg.clearRect(0,0,vwidth,vheight);
+		
+		offg.setComposite(alpha1);
+		offg.drawImage(viewOld, 0, 0, this);
+		    
+		offg.setComposite(alpha2); 
+		offg.drawImage(viewNew, 0, 0, this);
+		
+		g2.drawImage(offi, 0, 0, this);
+	}
+	else{
+	// ***** Add T.Fujino 20091018 ED **************************************************************	
+		
 		long t;
 		t = System.currentTimeMillis();
 
@@ -1770,6 +1839,10 @@ public synchronized void paint(Graphics g) {
 		
 //		System.out.println("Time in paint(): " + t + " ms");
 
+		// ***** Add T.Fujino 20091018 ST **************************************************************	
+		}
+		// ***** Add T.Fujino 20091018 ED **************************************************************	
+	    
 	}
 
 	// creates the backbuffer used to draw frames
@@ -1789,6 +1862,7 @@ public synchronized void paint(Graphics g) {
 
 	// renders a panorama frame
 	void renderFrame(Graphics gBB) {
+	
 		gBB.drawImage(view, vx, vy, this);
 		if (hsready)
 			hs_draw(gBB, vx, vy, vwidth, vheight, curhs, showhs);
@@ -1815,9 +1889,8 @@ public synchronized void paint(Graphics g) {
 					applet.paint(gBB);
 			} catch (Exception _ex) {
 			}
-			
-	}
 
+	}
 
 	// tests the java version to see if we can use the VolatileImage class
 	boolean canUseAcceleratedGraphic() {
@@ -2454,10 +2527,12 @@ public synchronized void paint(Graphics g) {
 		double d,
 		double d1,
 		double d2) {
+		
 		loadPanoFromList(i);
 		yaw = d;
 		pitch = d1;
 		hfov = d2;
+		
 		repaint();
 		start();
 	}
@@ -2471,7 +2546,6 @@ public synchronized void paint(Graphics g) {
 	void loadPanoFromList(int i) {
 		String s;
 		if ((s = myGetParameter(null, "pano" + i)) != null) {
-			stop();
 			PV_reset();
 			initialize();
 			CurrentPano = i;
@@ -2493,12 +2567,21 @@ public synchronized void paint(Graphics g) {
 		start();
 	}
 	
-//パノラマ画像の個別指定
+	//パノラマ画像の個別指定
 	public void newPano(
 	String s,
 	double d,
 	double d1,
 	double d2) {
+
+		// ***** Add T.Fujino 20091018 ST **************************************************************
+		//System.out.println("newPano(s,d,d1,d2)");
+		//System.out.println("newPano(s,d,d1,d2):s = " + s);
+		
+		// 切替前のパノラマをコピーしておく
+		viewOld = this.createCopyImage(view);
+		// ***** Add T.Fujino 20091018 ED **************************************************************
+
 		stop();
 		PV_reset();
 		initialize();
@@ -2510,9 +2593,433 @@ public synchronized void paint(Graphics g) {
 		pitch = d1;
 		hfov = d2;
 		repaint();
+		
+		// ***** Add T.Fujino 20091018 ST **************************************************************
+		// 切替後のパノラマをロードしておく
+		viewNew = this.loadNextImage();
+
+		// フェード効果の実行
+		effectOfFade();
+		
+		//System.out.println("viewOld = " + viewOld);
+		//System.out.println("viewNew = " + viewNew);
+		// ***** Add T.Fujino 20091018 ED **************************************************************
+
 		start();
+		
 	}
 
+	// ***** Add T.Fujino 20091018 ST **************************************************************
+	/**
+	 * 切替前のパノラマ画像のコピー
+	 * @param src
+	 * @return
+	 */
+	private Image createCopyImage(Image src){
+		
+		Image ret = null;
+
+		// 画像のコピー（ディープコピー）
+		// ※ 単純に変数を参照しただけでは画像データはコピーされず
+		// ※ 新たに生成したオブジェクトに画像を再描画し、コピーとする
+		BufferedImage img = new BufferedImage(src.getWidth(this), src
+				.getHeight(this), BufferedImage.TYPE_INT_RGB);
+		Graphics g = img.getGraphics();
+		g.drawImage(src, 0, 0, null);
+		
+		ret = img;
+
+		return ret;
+		
+	}
+	
+	/**
+	 * 切替後のパノラマ画像のロード
+	 */
+	private Image loadNextImage() {
+
+		Image ret = null;
+		
+		// ※ 既存のメソッド（run, paint, finishInit）から、画像のロードに関する部分のみを利用
+		// ※ それぞれのメソッドに、不要な処理が残っている可能性が高いです
+		try {
+
+//			System.out.println("loadView");
+//			System.out.println("filename = " + filename);
+//			System.out.println("vdata = " + vdata);
+//			System.out.println("source = " + source);
+//			System.out.println("view = " + view);
+			
+			this.partsOfRun();
+
+			this.partsOfPaint();
+
+			this.partsOfFinishInit();
+
+			ret = view;
+			
+//    		System.out.println("filename = " + filename);
+//    		System.out.println("vdata = " + vdata);
+//    		System.out.println("source = " + source);
+//    		System.out.println("view = " + view);
+    		
+		} catch (OutOfMemoryError ex) {
+			if (outOfMemoryURL != null) {
+				// opens a page that should contain an explication of the out of memory problem
+				JumpToLink( outOfMemoryURL, null );
+			} else {
+				throw ex;
+			}
+		} catch (Exception ex) {
+			ex.printStackTrace();
+		}
+		
+		return ret;
+		
+    }
+
+	/**
+	 * runメソッドの一部分（処理を流用）
+	 */
+	private void partsOfRun(){
+
+		// ==================== START ====================
+		// パノラマ画像ファイルの読み込み（と思われる）
+		int k;
+		// added a try block to catch out of memory error
+		if (Thread.currentThread() == preloadthread && preload != null) {
+			int i;
+			k = getNumArgs(preload, ',');
+			i = k;
+			if (k > 0) {
+				for (int j = 0; j < i; j++) {
+					String s1;
+					if ((s1 = getArg(j, preload, ',')) != null
+							&& file_cachefiles && file_Cache != null
+							&& file_Cache.get(s1) == null && s1 != filename)
+						file_read(s1, null);
+				}
+
+			}
+			return;
+		}
+		if (Thread.currentThread() == ptviewerScript) {
+			if (PTScript != null)
+				PTViewerScript(PTScript);
+			return;
+		}
+		ResetCursor();
+		if (!PanoIsLoaded) {
+			show_pdata = true;
+			if (filename == null)
+				if (pwidth != 0)
+					filename = "_PT_Grid";
+				else
+					show_pdata = false;
+			if (filename != null && filename.toLowerCase().endsWith(".mov"))
+				pdata = im_loadPano(null, pdata, pwidth, pheight);
+			else {
+				pdata = im_loadPano(filename, pdata, pwidth, pheight);
+				if (showToolbar) {
+					((toolbar) tlbObj).setBarPerc(0); // clears the progress
+													  // bar
+				}
+			}
+			System.gc();
+		}
+		// ====================  END  ====================
+		
+	}
+
+	/**
+	 * paintメソッドの一部分（処理を流用）
+	 */
+	private void partsOfPaint(){
+
+		// ==================== START ====================
+		// 画像データ（view, source）の更新（と思われる）
+        if(vdata == null)
+        {            	
+            if(vwidth == 0)
+                vwidth = getSize().width;
+            if(vheight == 0)
+                vheight = getSize().height;              
+            if(showToolbar)
+                vheight -= ((toolbar)tlbObj).getHeight();
+            if(math_fovy(hfov, vwidth, vheight) > pitch_max - pitch_min)
+            {
+                for(; math_fovy(hfov, vwidth, vheight) > pitch_max - pitch_min; hfov /= 1.015D);
+                for(hfov *= 1.015D; math_fovy(hfov, vwidth, vheight) > pitch_max - pitch_min; hfov /= 1.0009999999999999D);
+            }
+            double d = math_fovy(hfov, vwidth, vheight) / 2D;
+            if(pitch > pitch_max - d && pitch_max != 90D)
+                pitch = pitch_max - d;
+            if(pitch < pitch_min + d && pitch_min != -90D)
+                pitch = pitch_min + d;
+            vdata = new int[vwidth * vheight];   	
+            hs_vdata = new byte[vwidth * vheight];
+            if(filename != null && filename.toLowerCase().endsWith(".mov"))
+            {
+                for(int k1 = 0; k1 < hs_vdata.length; k1++)
+                    hs_vdata[k1] = 0;
+
+            } else
+            {
+                for(int l1 = 0; l1 < hs_vdata.length; l1++)
+                    hs_vdata[l1] = -1;
+
+            }
+            dirty = true;
+          	
+          	source = new MemoryImageSource(vwidth, vheight, vdata, 0, vwidth);
+            source.setAnimated(true);
+            if(view == null){
+                view = createImage(source);	
+            }
+            if(antialias && pdata != null)
+            {
+                scaledPanos = new Vector();
+                scaledPanos.addElement(pdata);
+                int ai2[][] = pdata;
+                double d4 = hfov_max / ((double)vwidth * 360D * max_oversampling);
+                for(int k2 = 0; ai2 != null && (double)ai2[0].length * d4 > 1.0D; k2++)
+                {
+                    ai2 = im_halfsize(ai2);
+                    scaledPanos.addElement(ai2);
+                }
+            }
+        }
+		// ====================  END  ====================
+		
+		// ==================== START ====================
+		// 画像データ（vdata）の更新（と思われる）
+        for (int i = 0; i < vdata.length; i++)
+			vdata[i] = 0;
+        
+		if (dirty && show_pdata) {
+			int ai1[][] = pdata;
+			if (antialias && scaledPanos != null) {
+				double d3 = hfov / ((double) vwidth * 360D * max_oversampling);
+				int j1 = 0;
+				for (int k1 = pdata[0].length; (double) k1 * d3 > 1.0D; k1 >>= 1)
+					j1++;
+
+				if (scaledPanos.elementAt(j1) != null) {
+					ai1 = (int[][]) scaledPanos.elementAt(j1);
+					math_updateLookUp(ai1[0].length);
+				}
+			}
+
+			// these variables are only used if ptviewer is set to use
+			// Lanczos2
+			// they are used to force using a faster interpolator while
+			// dynLoading ROIs
+			boolean useBilinear = forceBilIntepolator;
+			boolean useLanczos2 = !forceBilIntepolator;
+			forceBilIntepolator = false;
+			switch (quality) {
+			default:
+				break;
+
+			case 0: // '\0'
+				math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+						pitch, false, false);
+				dirty = false;
+				break;
+
+			case 1: // '\001'
+				if (panning || lastframe > frames) {
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, false, false);
+				} else {
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, true, false);
+					System.gc();
+					dirty = false;
+				}
+				break;
+
+			case 2: // '\002'
+				if (panning) {
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, false, false);
+				} else {
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, true, false);
+					System.gc();
+					dirty = false;
+				}
+				break;
+
+			case 3: // '\003'
+				math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+						pitch, true, false);
+				dirty = false;
+				break;
+			// FS+
+			case 4: // nn for panning & autopanning, lanczos2 else
+				if (panning || lastframe > frames || keyPanning) {
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, false, false);
+				} else {
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, useBilinear, useLanczos2);
+					System.gc();
+					dirty = false;
+				}
+				break;
+			case 5: // bilinear for panning & autopanning, lanczos2 else
+				if (panning || lastframe > frames || keyPanning) {
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, true, false);
+				} else {
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, useBilinear, useLanczos2);
+					System.gc();
+					dirty = false;
+				}
+				break;
+			case 6: // nn for fast panning & autopanning, bilinear for
+				// slow panning & autopanning, lanczos2 else
+				if (panning || lastframe > frames || keyPanning) {
+					// decides if panning is fast or slow
+					int FEW_PIXELS = 70;
+					boolean fastPanning = false;
+					if (panning) {
+						// only if panning with the mouse
+						int deltaX = newx - oldx;
+						int deltaY = newy - oldy;
+						deltaX *= mouseSensitivity / mouseQ6Threshold;
+						deltaY *= mouseSensitivity / mouseQ6Threshold;
+						if (Math.abs(deltaX) * vwidth / 1024 > FEW_PIXELS)
+							fastPanning = true;
+						if (Math.abs(deltaY) * vheight / 768 > FEW_PIXELS)
+							fastPanning = true;
+					}
+
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, !fastPanning, false);
+				} else {
+					math_extractview(ai1, vdata, hs_vdata, vwidth, hfov, yaw,
+							pitch, useBilinear, useLanczos2);
+					System.gc();
+					dirty = false;
+				}
+				break;
+			// FS-
+			}
+		}
+		hs_setCoordinates(vwidth, vheight, pwidth, pheight, yaw, pitch, hfov);
+		sendView();
+		frames++;
+		source.newPixels();
+		// ====================  END  ====================
+				
+	}
+
+	/**
+	 * finishInitメソッドの一部分（処理を流用）
+	 */
+	private void partsOfFinishInit(){
+
+		// ==================== START ====================
+		// 表示位置などの更新（と思われる）
+		// ※ 描画を行う部分は不要のため、コメントアウトしてます
+		shs_setup();
+		ready = true;
+		requestFocus();
+		ResetCursor();
+//		repaint();
+//		paint(getGraphics());
+		if (loadAllRoi && !PanoIsLoaded) {
+			if( dynLoadROIs )
+				loadROI_dyn();
+			else
+				loadROI(0, numroi - 1);
+		}
+		if( !PanoIsLoaded && usingCustomFile ) {
+			ptvf.loadTiles();
+		}
+		if (!PanoIsLoaded)
+			hs_setup(pdata);
+		hsready = true;
+		PanoIsLoaded = true;
+		if (autopan != 0.0D)
+		{			
+			// E.Gigi - 2005.06.12
+			if (autoNumTurns != 0.0D)
+				lastframe = frames + (int) (autoNumTurns*360/autopan);
+			else
+				lastframe = frames + 0x5f5e100L;
+		}
+		int i;
+		if (inits != null)
+			if ((i = inits.indexOf('*')) == -1)
+				JumpToLink(inits, null);
+			else
+				JumpToLink(inits.substring(0, i), inits.substring(i + 1));
+		// FS+
+		// to be able to show hotspots before panning
+		dirty = true;
+		if( tlbObj != null ) ((toolbar) tlbObj).syncHSButton();		// the hs button remains pressed if we omit this line
+		// to show a cursor different from default at startup
+		if( ptcursor != 0 ) 
+			setCursor(Cursor.getPredefinedCursor(ptcursor));
+		// FS-
+//		repaint();
+		SetupSounds();
+		if (preload != null && preloadthread == null) {
+			preloadthread = new Thread(this);
+			try {
+				preloadthread.setPriority(1);
+			} catch (SecurityException _ex) {
+			}
+			preloadthread.start();
+		}
+		// ====================  END  ====================
+		
+	}
+
+	/**
+	 * フェード効果
+	 */
+	void effectOfFade(){
+		
+		// フェード効果用にpaint時の動作フラグを設定
+		paintModeFlag = ptviewer.PAINT_MODE_FLAG_FADE;
+
+		int fadeCntMax = ptviewer.FADE_COUNT_MAX;
+		float fadeCnt = (float)(1.0f / fadeCntMax);
+		
+		for(int i=1; i<=fadeCntMax;i++){
+			
+			// 透過率の設定
+			alphavalue1 = (float)(alphavalue1 - fadeCnt);
+			alpha1 = AlphaComposite.getInstance(AlphaComposite.SRC_OVER,alphavalue1); /* 透明度alphavalue */
+			alphavalue2 = (float)(fadeCnt * i);
+			alpha2 = AlphaComposite.getInstance(AlphaComposite.SRC_OVER,alphavalue2); /* 透明度alphavalue */
+			
+			// 描画処理実行
+			//repaint();
+			update(getGraphics());
+			
+			try {
+				Thread.currentThread( ).sleep(30);
+			} catch (InterruptedException e) {
+			}
+			
+		}
+		
+		// 透過率を初期値に戻す
+		alphavalue1 = 1.0f;
+		alphavalue2 = 0.0f;
+		
+		// 動作フラグを元に戻す
+		paintModeFlag = ptviewer.PAINT_MODE_FLAG_NULL;
+		
+	}
+	// ***** Add T.Fujino 20091018 ED **************************************************************
+	
 	public void SetURL(String s) {
 		newPano("{file=" + s + "}");
 	}
@@ -4035,7 +4542,7 @@ public synchronized void paint(Graphics g) {
 		}
 		return p;
 	}
-
+	
 	int[][] im_halfsize(int ai[][]) {
 		int i = ai.length;
 		int j = ai[0].length;
@@ -4195,7 +4702,11 @@ public synchronized void paint(Graphics g) {
 		Color color,
 		String s,
 		int k) {
+		// ***** Del T.Fujino 20091018 ST **************************************************************
+		// ※ Hotspotの文字表示が真っ白になるのを防ぐため
+		// ※ 最新版のPTViewerでは既に修正済とのこと
 		//g.clearRect(i, j, dimension.width, dimension.height);
+		// ***** Del T.Fujino 20091018 ED **************************************************************
 		if (color == null)
 			g.setColor(Color.black);
 		else
