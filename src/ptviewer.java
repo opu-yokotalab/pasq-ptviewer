@@ -265,7 +265,7 @@ import java.util.Hashtable;
 import java.util.Vector;
 
 public class ptviewer extends Applet implements Runnable {
-
+	
 	// ***** Add T.Fujino 20091018 ST **************************************************************
 	public static final int FADE_MODE_ON = 1;
 	public static final int FADE_MODE_OFF = 2;
